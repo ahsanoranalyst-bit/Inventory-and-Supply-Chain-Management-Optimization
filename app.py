@@ -3,155 +3,216 @@ import pandas as pd
 import json
 from fpdf import FPDF
 from datetime import datetime
+import io
 
-# --- 1. CONFIGURATION ---
-VALID_KEY = "EDU-PRO-200"
-st.set_page_config(page_title="Edu-Supply Chain Master", layout="wide")
+# --- 1. CORE SYSTEM CONFIGURATION ---
+VALID_LICENSE = "EDU-PRO-200"
+st.set_page_config(page_title="Edu-Strategic Supply Master", layout="wide")
 
-# Session State Initialization
-if 'auth' not in st.session_state:
-    st.session_state['auth'] = False
+# Initialize Session States
+if 'authenticated' not in st.session_state:
+    st.session_state['authenticated'] = False
 if 'main_capital' not in st.session_state:
     st.session_state['main_capital'] = 0.0
-if 'cap_set' not in st.session_state:
-    st.session_state['cap_set'] = False
-if 'sector_data' not in st.session_state:
-    st.session_state['sector_data'] = {
-        "Primary": {"spent": 0.0, "profit": 100, "entries": []},
-        "Secondary": {"spent": 0.0, "profit": 100, "entries": []},
-        "College": {"spent": 0.0, "profit": 100, "entries": []}
+if 'is_capital_locked' not in st.session_state:
+    st.session_state['is_capital_locked'] = False
+if 'institute_name' not in st.session_state:
+    st.session_state['institute_name'] = ""
+if 'data_store' not in st.session_state:
+    # Profit Level Range: 1 to 200 (Default: 100)
+    st.session_state['data_store'] = {
+        "Primary": {"spent": 0.0, "profit_level": 100, "entries": []},
+        "Secondary": {"spent": 0.0, "profit_level": 100, "entries": []},
+        "College": {"spent": 0.0, "profit_level": 100, "entries": []}
     }
 
-# --- 2. BACKUP LOGIC ---
-def save_data():
-    return json.dumps({
+# --- 2. UTILITY FUNCTIONS ---
+
+def generate_pdf_report(sector_name, sector_data, total_cap, remaining_cap):
+    """Generates a professional Strategic PDF Report."""
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", 'B', 18)
+    pdf.cell(0, 15, "Strategic Supply Chain Report", ln=True, align='C')
+    pdf.set_font("Arial", '', 12)
+    pdf.cell(0, 10, f"Institute: {st.session_state['institute_name']}", ln=True)
+    pdf.cell(0, 10, f"Sector: {sector_name} | Date: {datetime.now().strftime('%Y-%m-%d')}", ln=True)
+    pdf.ln(5)
+    
+    # Financial Summary Section
+    pdf.set_fill_color(230, 230, 230)
+    pdf.set_font("Arial", 'B', 12)
+    pdf.cell(0, 10, " Financial Summary", ln=True, fill=True)
+    pdf.set_font("Arial", '', 11)
+    pdf.cell(0, 10, f"Total Fixed Project Capital: {total_cap:,.2f}", ln=True)
+    pdf.cell(0, 10, f"Remaining Available Capital: {remaining_cap:,.2f}", ln=True)
+    pdf.cell(0, 10, f"Sector Profit Level: {sector_data['profit_level']}/200", ln=True)
+    pdf.ln(5)
+
+    # Entry Records Section
+    pdf.set_font("Arial", 'B', 12)
+    pdf.cell(0, 10, " Detailed Decision Entries", ln=True, fill=True)
+    pdf.set_font("Arial", '', 10)
+    for entry in sector_data['entries']:
+        record_text = f"[{entry['time']}] {entry['cat']} - {entry['name']}: Amount {entry['amount']} | Info: {entry['details']}"
+        pdf.multi_cell(0, 8, record_text)
+        pdf.ln(1)
+    
+    return pdf.output(dest='S').encode('latin-1')
+
+def export_json_backup():
+    """Bundles all state data into a JSON string for backup."""
+    backup_data = {
         "main_capital": st.session_state['main_capital'],
-        "cap_set": st.session_state['cap_set'],
-        "sector_data": st.session_state['sector_data']
-    })
+        "locked": st.session_state['is_capital_locked'],
+        "store": st.session_state['data_store'],
+        "inst": st.session_state['institute_name']
+    }
+    return json.dumps(backup_data, indent=4)
 
-def load_data(uploaded_file):
-    data = json.load(uploaded_file)
-    st.session_state['main_capital'] = data['main_capital']
-    st.session_state['cap_set'] = data['cap_set']
-    st.session_state['sector_data'] = data['sector_data']
-
-# --- 3. LOGIN ---
-if not st.session_state['auth']:
-    st.title("🔐 Enterprise Strategic Login")
-    inst = st.text_input("Institute Name")
-    key = st.text_input("License Key", type="password")
-    if st.button("Login"):
-        if key == VALID_KEY:
-            st.session_state['auth'] = True
-            st.session_state['inst_name'] = inst
+# --- 3. AUTHENTICATION LAYER ---
+if not st.session_state['authenticated']:
+    st.title("🔐 Enterprise Strategic Portal")
+    inst_input = st.text_input("Enter Institute Name")
+    license_input = st.text_input("Enter License Key", type="password")
+    
+    if st.button("Activate System"):
+        if license_input == VALID_LICENSE:
+            st.session_state['authenticated'] = True
+            st.session_state['institute_name'] = inst_input
             st.rerun()
-        else: st.error("Access Denied!")
+        else:
+            st.error("Invalid License Key. Access Denied.")
     st.stop()
 
-# --- 4. SIDEBAR NAVIGATION ---
-total_spent = sum(s['spent'] for s in st.session_state['sector_data'].values())
-remaining_cap = st.session_state['main_capital'] - total_spent
+# --- 4. SIDEBAR GLOBAL MONITORING ---
+total_spent_global = sum(s['spent'] for s in st.session_state['data_store'].values())
+remaining_capital_global = st.session_state['main_capital'] - total_spent_global
 
-st.sidebar.title(f"🏢 {st.session_state['inst_name']}")
-if st.session_state['cap_set']:
-    st.sidebar.metric("Available Capital", f"{remaining_cap:,.0f}")
+st.sidebar.title(f"🏢 {st.session_state['institute_name']}")
 
-# Backup/Restore
-with st.sidebar.expander("💾 Backup & Restore"):
-    st.download_button("Download Data", save_data(), "school_record.json")
-    up = st.file_uploader("Upload Data", type="json")
-    if up and st.button("Restore"):
-        load_data(up)
+if st.session_state['is_capital_locked']:
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("Live Capital Status")
+    st.sidebar.write(f"Fixed Budget: **{st.session_state['main_capital']:,.2f}**")
+    st.sidebar.metric("Available Funds", f"{remaining_capital_global:,.2f}", delta_color="normal")
+    
+    # Capital Usage Visualizer
+    usage_ratio = max(0.0, min(1.0, remaining_capital_global / st.session_state['main_capital']))
+    st.sidebar.progress(usage_ratio)
+    if usage_ratio < 0.2:
+        st.sidebar.warning("Low Capital Warning!")
+
+# Data Persistence (Backup/Restore)
+with st.sidebar.expander("💾 System Backup"):
+    st.download_button("Download Database", export_json_backup(), "strategy_backup.json")
+    uploaded_file = st.file_uploader("Restore Database", type="json")
+    if uploaded_file and st.button("Restore Now"):
+        restored = json.load(uploaded_file)
+        st.session_state['main_capital'] = restored['main_capital']
+        st.session_state['is_capital_locked'] = restored['locked']
+        st.session_state['data_store'] = restored['store']
+        st.session_state['institute_name'] = restored['inst']
         st.rerun()
 
-if st.sidebar.button("Logout"):
-    st.session_state['auth'] = False
+if st.sidebar.button("🚪 Logout"):
+    st.session_state['authenticated'] = False
     st.rerun()
 
-sector = st.sidebar.selectbox("Select Sector", ["Primary", "Secondary", "College"])
-page = st.sidebar.radio("Optimization Logic", [
-    "Dashboard & Summary", 
-    "1. Capital & Resource Logic", 
-    "2. Quotation & Market Selection", 
-    "3. Build vs Buy (Manufacturing)", 
-    "4. Inventory Risk & Timing"
+# --- 5. NAVIGATION ---
+selected_sector = st.sidebar.selectbox("Active Sector", ["Primary", "Secondary", "College"])
+logic_page = st.sidebar.radio("Decision Framework", [
+    "Global Dashboard", 
+    "1. Capital & Resources", 
+    "2. Market Selection", 
+    "3. Build vs Buy", 
+    "4. Inventory Risk"
 ])
 
-# --- 5. DASHBOARD & FIXED CAPITAL ---
-if page == "Dashboard & Summary":
-    st.title("📊 Master Strategic Dashboard")
-    if not st.session_state['cap_set']:
-        st.warning("Please set the FIXED Total Capital Budget first.")
-        c_val = st.number_input("Enter Budget Amount", min_value=1.0)
-        if st.button("Set Capital"):
-            st.session_state['main_capital'] = c_val
-            st.session_state['cap_set'] = True
+# --- 6. DASHBOARD & GAP ANALYSIS ---
+if logic_page == "Global Dashboard":
+    st.title("📊 Strategic Dashboard & Gap Analysis")
+    
+    if not st.session_state['is_capital_locked']:
+        st.info("Welcome. Please initialize the system by setting the Total Fixed Capital.")
+        initial_cap = st.number_input("Enter Total Project Budget", min_value=0.0, step=1000.0)
+        if st.button("Initialize and Lock Budget"):
+            st.session_state['main_capital'] = initial_cap
+            st.session_state['is_capital_locked'] = True
             st.rerun()
     else:
-        st.success(f"Fixed Capital: {st.session_state['main_capital']:,.0f}")
-        m1, m2 = st.columns(2)
-        avg_p = sum(s['profit'] for s in st.session_state['sector_data'].values()) / 3
-        m1.metric("Overall Profit Level", f"{avg_p:.0f}/200")
-        m2.metric("Remaining Capital", f"{remaining_cap:,.0f}")
+        avg_profit_global = sum(s['profit_level'] for s in st.session_state['data_store'].values()) / 3
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Avg Profit Level", f"{avg_profit_global:.1f}/200")
+        col2.metric("Funds Remaining", f"{remaining_capital_global:,.0f}")
+        col3.metric("Total Sectors", "3")
+
+        st.markdown("---")
+        st.subheader("⚠️ Gap Analysis & Strategic Needs")
         
-        st.subheader("Sector Wise Performance")
-        df = pd.DataFrame.from_dict(st.session_state['sector_data'], orient='index')
-        st.table(df[['spent', 'profit']])
+        g1, g2, g3 = st.columns(3)
+        sectors = list(st.session_state['data_store'].keys())
+        for i, col in enumerate([g1, g2, g3]):
+            s_name = sectors[i]
+            s_val = st.session_state['data_store'][s_name]
+            with col:
+                st.markdown(f"#### {s_name}")
+                if s_val['profit_level'] < 110:
+                    st.error(f"Low Performance: Level {s_val['profit_level']}. Review procurement strategy.")
+                elif s_val['profit_level'] > 170:
+                    st.success("Optimal Performance. Strategy is efficient.")
+                else:
+                    st.warning("Average Performance. Needs market optimization.")
+                
+                if s_val['spent'] > (st.session_state['main_capital'] / 3):
+                    st.info("High consumption of global funds.")
 
-# --- 6. THE FOUR MAIN HEADINGS (LOGIC MODULES) ---
-
-elif page == "1. Capital & Resource Logic":
-    st.header(f"💰 Capital Allocation - {sector}")
-    with st.expander("➕ Add Resource/Capital Entry"):
-        name = st.text_input("Resource Name (e.g. New Building, Lab Equipment)")
-        cost = st.number_input("Cost Amount", min_value=0.0)
-        if st.button("Confirm Entry"):
-            if cost <= remaining_cap:
-                st.session_state['sector_data'][sector]['spent'] += cost
-                st.session_state['sector_data'][sector]['entries'].append(f"Res: {name} - {cost}")
-                st.success("Capital Allocated and Summary Updated!")
+# --- 7. DYNAMIC MODULE LOGIC ---
+else:
+    st.title(f"🛠️ {logic_page}")
+    st.subheader(f"Sector: {selected_sector}")
+    
+    # Input Framework
+    with st.expander(f"➕ Add Entry to {logic_page}"):
+        ca, cb = st.columns(2)
+        with ca:
+            item_name = st.text_input("Item Name / Strategic Action")
+            item_amount = st.number_input("Transaction Amount", min_value=0.0)
+        with cb:
+            item_details = st.text_area("Analysis / Vendor Details / Risk Factors")
+        
+        if st.button("Submit Decision"):
+            if item_amount <= remaining_capital_global:
+                new_entry = {
+                    "cat": logic_page,
+                    "name": item_name,
+                    "amount": item_amount,
+                    "details": item_details,
+                    "time": datetime.now().strftime("%Y-%m-%d %H:%M")
+                }
+                st.session_state['data_store'][selected_sector]['entries'].append(new_entry)
+                st.session_state['data_store'][selected_sector]['spent'] += item_amount
+                
+                # Logic to adjust Profit Level based on strategic module
+                if "Market" in logic_page or "Build" in logic_page:
+                    st.session_state['data_store'][selected_sector]['profit_level'] = min(200, st.session_state['data_store'][selected_sector]['profit_level'] + 10)
+                
+                st.success("Entry recorded successfully.")
                 st.rerun()
-            else: st.error("Not enough capital in global pool!")
-
-elif page == "2. Quotation & Market Selection":
-    st.header(f"⚖️ Market Selection Analyzer - {sector}")
-    with st.expander("➕ Add Quotation for Comparison"):
-        item = st.text_input("Item Name")
-        mkt_p = st.number_input("Market Price (Benchmark)", value=100.0)
-        vnd_p = st.number_input("Vendor Price", value=90.0)
-        if st.button("Analyze Quotation"):
-            if vnd_p < mkt_p:
-                st.session_state['sector_data'][sector]['profit'] = min(200, st.session_state['sector_data'][sector]['profit'] + 15)
-                st.success("Best Value Found! Profit Level Increased.")
             else:
-                st.session_state['sector_data'][sector]['profit'] = max(0, st.session_state['sector_data'][sector]['profit'] - 10)
-                st.error("Overpriced! Profit Level Decreased.")
-            st.rerun()
+                st.error("Insufficient Global Capital available for this action.")
 
-elif page == "3. Build vs Buy (Manufacturing)":
-    st.header(f"🛠️ Manufacturing Decision - {sector}")
-    with st.expander("➕ Add Build vs Buy Analysis"):
-        prod = st.text_input("Product (e.g. Desks, Uniforms)")
-        make_cost = st.number_input("In-house Production Cost", value=500.0)
-        buy_cost = st.number_input("Market Ready-made Price", value=700.0)
-        if st.button("Save Decision"):
-            if make_cost < buy_cost:
-                st.session_state['sector_data'][sector]['profit'] = min(200, st.session_state['sector_data'][sector]['profit'] + 10)
-                st.success(f"Strategy: Building {prod} in-house is better for capital.")
-            else:
-                st.session_state['sector_data'][sector]['profit'] = max(0, st.session_state['sector_data'][sector]['profit'] - 5)
-                st.warning(f"Strategy: Buying {prod} from market is more efficient.")
-            st.rerun()
-
-elif page == "4. Inventory Risk & Timing":
-    st.header(f"📦 Inventory Risk Logic - {sector}")
-    with st.expander("➕ Add Inventory Record"):
-        inv_item = st.text_input("Inventory Item")
-        risk = st.selectbox("Market Risk Level", ["Low", "Stable", "Rising", "High"])
-        if st.button("Save Risk Profile"):
-            st.session_state['sector_data'][sector]['entries'].append(f"Inv: {inv_item} - Risk: {risk}")
-            if risk in ["Rising", "High"]:
-                st.warning("Advice: Pre-buy items now to avoid inflation impact on capital.")
-            st.success("Inventory Profile Added.")
-            st.rerun()
+    st.markdown("---")
+    st.subheader("Stored Records")
+    if st.session_state['data_store'][selected_sector]['entries']:
+        all_data = pd.DataFrame(st.session_state['data_store'][selected_sector]['entries'])
+        # Filter data for the current active module
+        filtered_data = all_data[all_data['cat'] == logic_page]
+        st.table(filtered_data)
+        
+        # PDF Generator Button
+        if st.button(f"Generate {selected_sector} PDF Report"):
+            report_bytes = generate_pdf_report(selected_sector, st.session_state['data_store'][selected_sector], st.session_state['main_capital'], remaining_capital_global)
+            st.download_button(f"Download {selected_sector} Strategy.pdf", report_bytes, f"{selected_sector}_Report.pdf")
+    else:
+        st.info("No records found in this category.")
