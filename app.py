@@ -21,7 +21,7 @@ if 'project_data' not in st.session_state:
 
 # --- 2. AUTHENTICATION ---
 if not st.session_state['auth']:
-    st.title("🔐 Inventory-and-Supply-Chain-Management-Optimization")
+    st.title(" Inventory-and-Supply-Chain-Management-Optimization")
     inst_name = st.text_input("Institute Name")
     key = st.text_input("Strategic License Key", type="password")
     if st.button("Unlock System"):
@@ -36,14 +36,14 @@ if not st.session_state['auth']:
 total_spent = sum(s['spent'] for s in st.session_state['project_data'].values())
 remaining_balance = st.session_state['main_capital'] - total_spent
 
-st.sidebar.title(f"🏢 {st.session_state['inst_name']}")
+st.sidebar.title(f" {st.session_state['inst_name']}")
 if st.session_state['capital_locked']:
     st.sidebar.markdown("---")
     st.sidebar.metric("Available Capital", f"{remaining_balance:,.2f}")
     st.sidebar.progress(max(0.0, min(1.0, remaining_balance/st.session_state['main_capital'])))
 
 # Backup functionality
-with st.sidebar.expander("💾 System Backup"):
+with st.sidebar.expander(" System Backup"):
     st.download_button("Export Data", json.dumps(st.session_state['project_data']), "data.json")
 
 nav = st.sidebar.radio("Optimization Logic", ["Global Dashboard", "1. Capital & Resources", "2. Market Selection", "3. Build vs Buy", "4. Inventory Risk"])
@@ -51,7 +51,7 @@ active_sector = st.sidebar.selectbox("Active Sector", ["Primary", "Secondary", "
 
 # --- 4. DASHBOARD & COMPARATIVE ANALYZER ---
 if nav == "Global Dashboard":
-    st.title("📊 Master Strategic Dashboard")
+    st.title(" Master Strategic Dashboard")
    
     if not st.session_state['capital_locked']:
         st.warning("Initialize system with Fixed Capital.")
@@ -62,7 +62,7 @@ if nav == "Global Dashboard":
             st.rerun()
     else:
         # Comparison Logic
-        st.subheader("⚠️ Sector-Wise Gap Analysis")
+        st.subheader(" Sector-Wise Gap Analysis")
         scores = {k: v['profit'] for k, v in st.session_state['project_data'].items()}
         weakest = min(scores, key=scores.get)
        
@@ -78,11 +78,9 @@ if nav == "Global Dashboard":
                 else:
                     st.success(f"{name} is performing well.")
 
-       
-
 # --- 5. STRATEGIC PILLAR MODULES ---
 else:
-    st.title(f"🛠️ {nav}")
+    st.title(f" {nav}")
     st.write(f"Remaining Global Funds: **{remaining_balance:,.2f}**")
 
     with st.form("pillar_form"):
@@ -115,3 +113,17 @@ else:
 
     if st.session_state['project_data'][active_sector]['records']:
         st.table(pd.DataFrame(st.session_state['project_data'][active_sector]['records']))
+
+# --- 6. SYSTEM CONTROLS (NEW) ---
+st.markdown("---")
+footer_col1, footer_col2 = st.columns([1, 8])
+
+with footer_col1:
+    if st.button("Save", use_container_width=True):
+        st.success("Data Saved successfully!")
+
+with footer_col2:
+    if st.button("Log Out"):
+        # Clear specific session state to return to login
+        st.session_state['auth'] = False
+        st.rerun()
