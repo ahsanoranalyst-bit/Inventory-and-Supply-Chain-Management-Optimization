@@ -3,6 +3,7 @@ import pandas as pd
 import json
 from fpdf import FPDF
 from datetime import datetime
+from streamlit_gsheets import GSheetsConnection
 
 # --- 1. SYSTEM CONFIGURATION ---
 VALID_LICENSE = "Ahsan123"
@@ -32,19 +33,55 @@ if not st.session_state['auth']:
         else: st.error("Access Denied: Invalid Key")
     st.stop()
 
-# --- 3. GLOBAL MONITORING ---
+# --- 3. GLOBAL MONITORING & SYSTEM CONTROLS ---
 total_spent = sum(s['spent'] for s in st.session_state['project_data'].values())
 remaining_balance = st.session_state['main_capital'] - total_spent
 
 st.sidebar.title(f"🏢 {st.session_state['inst_name']}")
+
+# NEW: System Controls Section
+st.sidebar.markdown("### ⚙️ System Controls")
+col1, col2 = st.sidebar.columns(2)
+
+# Log Out Logic
+if col2.button("Log Out"):
+    for key in list(st.session_state.keys()):
+        del st.session_state[key]
+    st.rerun()
+
+# Save Logic (Google Sheets Integration)
+if col1.button("Save Data"):
+    try:
+        # Create connection (Uses secrets.toml or Streamlit Cloud Secrets)
+        conn = st.connection("gsheets", type=GSheetsConnection)
+        
+        # Flatten data for Google Sheets
+        all_records = []
+        for sector, content in st.session_state['project_data'].items():
+            for rec in content['records']:
+                rec_copy = rec.copy()
+                rec_copy['Sector'] = sector
+                rec_copy['Institute'] = st.session_state['inst_name'] # Project Identification
+                all_records.append(rec_copy)
+        
+        if all_records:
+            df_to_save = pd.DataFrame(all_records)
+            # Identifies the app by using the Institute Name as the worksheet name
+            conn.update(worksheet=st.session_state['inst_name'], data=df_to_save)
+            st.sidebar.success("Data Synced to Cloud!")
+        else:
+            st.sidebar.warning("No data to save.")
+    except Exception as e:
+        st.sidebar.error(f"Cloud Save Failed: {e}")
+
 if st.session_state['capital_locked']:
     st.sidebar.markdown("---")
     st.sidebar.metric("Available Capital", f"{remaining_balance:,.2f}")
     st.sidebar.progress(max(0.0, min(1.0, remaining_balance/st.session_state['main_capital'])))
 
 # Backup functionality
-with st.sidebar.expander("💾 System Backup"):
-    st.download_button("Export Data", json.dumps(st.session_state['project_data']), "data.json")
+with st.sidebar.expander("💾 Local Backup"):
+    st.download_button("Export JSON", json.dumps(st.session_state['project_data']), "data.json")
 
 nav = st.sidebar.radio("Optimization Logic", ["Global Dashboard", "1. Capital & Resources", "2. Market Selection", "3. Build vs Buy", "4. Inventory Risk"])
 active_sector = st.sidebar.selectbox("Active Sector", ["Primary", "Secondary", "College"])
@@ -61,7 +98,6 @@ if nav == "Global Dashboard":
             st.session_state['capital_locked'] = True
             st.rerun()
     else:
-        # Comparison Logic
         st.subheader("⚠️ Sector-Wise Gap Analysis")
         scores = {k: v['profit'] for k, v in st.session_state['project_data'].items()}
         weakest = min(scores, key=scores.get)
@@ -77,8 +113,6 @@ if nav == "Global Dashboard":
                     st.warning(f"Low funding detected in {name}.")
                 else:
                     st.success(f"{name} is performing well.")
-
-        
 
 # --- 5. STRATEGIC PILLAR MODULES ---
 else:
@@ -103,7 +137,6 @@ else:
 
         if st.form_submit_button("Submit Strategy"):
             if cost <= remaining_balance:
-                # Dynamic Profit Calculation
                 impact = 15 if ("High Impact" in decision or "cheaper" in decision or "Saving" in decision or "Low" in decision) else -10
                 
                 new_rec = {"Pillar": nav, "Label": label, "Cost": cost, "Impact": decision, "Time": datetime.now().strftime("%Y-%m-%d")}
@@ -115,5 +148,3 @@ else:
 
     if st.session_state['project_data'][active_sector]['records']:
         st.table(pd.DataFrame(st.session_state['project_data'][active_sector]['records']))
-
-
