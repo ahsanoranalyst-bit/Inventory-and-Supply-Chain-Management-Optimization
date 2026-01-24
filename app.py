@@ -6,7 +6,7 @@ from datetime import datetime
 
 # --- 1. SYSTEM CONFIGURATION ---
 VALID_LICENSE = "Ahsan123"
-st.set_page_config(page_title="Strategic Decision Master Pro", layout="wide")
+st.set_page_config(page_title="Inventory-and-Supply-Chain-Management-Optimization", layout="wide")
 
 # Persistent State Management
 if 'auth' not in st.session_state:
@@ -21,7 +21,7 @@ if 'project_data' not in st.session_state:
 
 # --- 2. AUTHENTICATION ---
 if not st.session_state['auth']:
-    st.title("🔐 Enterprise Strategic Portal")
+    st.title("🔐 Inventory-and-Supply-Chain-Management-Optimization")
     inst_name = st.text_input("Institute Name")
     key = st.text_input("Strategic License Key", type="password")
     if st.button("Unlock System"):
@@ -115,4 +115,5 @@ else:
 
     if st.session_state['project_data'][active_sector]['records']:
         st.table(pd.DataFrame(st.session_state['project_data'][active_sector]['records']))
+
 
