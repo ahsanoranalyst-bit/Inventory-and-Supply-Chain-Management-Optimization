@@ -33,46 +33,46 @@ if not st.session_state['auth']:
         else: st.error("Access Denied: Invalid Key")
     st.stop()
 
-# --- 3. GLOBAL MONITORING & SYSTEM CONTROLS ---
+# --- 3. GLOBAL MONITORING & CONTROLS ---
 total_spent = sum(s['spent'] for s in st.session_state['project_data'].values())
 remaining_balance = st.session_state['main_capital'] - total_spent
 
 st.sidebar.title(f"🏢 {st.session_state['inst_name']}")
 
-# NEW: System Controls Section
-st.sidebar.markdown("### ⚙️ System Controls")
+# NEW: System Control Buttons
+st.sidebar.markdown("### 🛠️ System Actions")
 col1, col2 = st.sidebar.columns(2)
 
-# Log Out Logic
+# Log Out Button: Clears state and restarts
 if col2.button("Log Out"):
     for key in list(st.session_state.keys()):
         del st.session_state[key]
     st.rerun()
 
-# Save Logic (Google Sheets Integration)
-if col1.button("Save Data"):
+# Save Button: Data Upload to Google Sheets
+if col1.button("Save"):
     try:
-        # Create connection (Uses secrets.toml or Streamlit Cloud Secrets)
+        # Establish connection using existing environment config
         conn = st.connection("gsheets", type=GSheetsConnection)
         
-        # Flatten data for Google Sheets
-        all_records = []
-        for sector, content in st.session_state['project_data'].items():
-            for rec in content['records']:
-                rec_copy = rec.copy()
-                rec_copy['Sector'] = sector
-                rec_copy['Institute'] = st.session_state['inst_name'] # Project Identification
-                all_records.append(rec_copy)
+        # Consolidate all sector data into one DataFrame
+        all_entries = []
+        for sector, data in st.session_state['project_data'].items():
+            for record in data['records']:
+                row = record.copy()
+                row['Sector'] = sector
+                row['Institute_ID'] = st.session_state['inst_name'] # Project Identification
+                all_entries.append(row)
         
-        if all_records:
-            df_to_save = pd.DataFrame(all_records)
-            # Identifies the app by using the Institute Name as the worksheet name
-            conn.update(worksheet=st.session_state['inst_name'], data=df_to_save)
-            st.sidebar.success("Data Synced to Cloud!")
+        if all_entries:
+            df_cloud = pd.DataFrame(all_entries)
+            # Updates the sheet (ensure your sheet name or URL is in st.secrets)
+            conn.update(data=df_cloud)
+            st.sidebar.success("Cloud Sync Complete!")
         else:
             st.sidebar.warning("No data to save.")
     except Exception as e:
-        st.sidebar.error(f"Cloud Save Failed: {e}")
+        st.sidebar.error(f"Save Error: {str(e)}")
 
 if st.session_state['capital_locked']:
     st.sidebar.markdown("---")
@@ -80,8 +80,8 @@ if st.session_state['capital_locked']:
     st.sidebar.progress(max(0.0, min(1.0, remaining_balance/st.session_state['main_capital'])))
 
 # Backup functionality
-with st.sidebar.expander("💾 Local Backup"):
-    st.download_button("Export JSON", json.dumps(st.session_state['project_data']), "data.json")
+with st.sidebar.expander("💾 System Backup"):
+    st.download_button("Export Data", json.dumps(st.session_state['project_data']), "data.json")
 
 nav = st.sidebar.radio("Optimization Logic", ["Global Dashboard", "1. Capital & Resources", "2. Market Selection", "3. Build vs Buy", "4. Inventory Risk"])
 active_sector = st.sidebar.selectbox("Active Sector", ["Primary", "Secondary", "College"])
