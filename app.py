@@ -5,7 +5,7 @@ from fpdf import FPDF
 from datetime import datetime
 
 # --- 1. SYSTEM CONFIGURATION ---
-VALID_LICENSE = "EDU-PRO-200"
+VALID_LICENSE = "Ahsan123"
 st.set_page_config(page_title="Strategic Decision Master Pro", layout="wide")
 
 # Persistent State Management
@@ -115,3 +115,4 @@ else:
 
     if st.session_state['project_data'][active_sector]['records']:
         st.table(pd.DataFrame(st.session_state['project_data'][active_sector]['records']))
+
